@@ -22,9 +22,9 @@ const PostSchema = new Schema({
         unique: true,
         ref: "User"
     }],
-    isLike: {
-        type: Boolean,
-        default: false
+    LikeCounts:{
+        type:Number,
+        default:0
     },
     comments: [{
         text: String,

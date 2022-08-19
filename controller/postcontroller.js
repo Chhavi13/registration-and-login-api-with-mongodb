@@ -23,7 +23,8 @@ exports.createPost = async (req, res) => {
                 content,
                 postedBy: postedby,
                 image: `http://localhost:5000/image/${image}`,
-                isLike: false
+
+
             }
         )
         console.log(post)
@@ -40,81 +41,152 @@ exports.createPost = async (req, res) => {
 exports.getAllPosts = async (req, res) => {
     // console.log("req post",req.user)
     //    const postedby=req.user.data.user_id
+    // res.send(req.user.data.user_id)
 
-    Post.find().populate({ path: 'postedBy', model: User })
+
+    let Data = await Post.find().populate({ path: 'postedBy', model: User })
         .populate({ path: 'comments.postedBy', model: User })
-        .exec((err, result) => {
-            if (err) {
-                return res.status(500).json(err);
-            }
-            // console.log("totalPost",result)
-            res.status(200).json(result);
-        })
+    let newData = Data.map((res) => {
+        // if (res.likes.includes(req.user.data.user_id)) {
+        //     res.isLike = true
+        //     return res;
+
+        // }
+        // console.log(res.title)
+        // res.title = "ishtiyaq khan"
+        // res['isLike'] = true
+        // return res;
+        if (res.likes.includes(req.user.data.user_id)) {
+            return { ...res._doc, ['isLike']: true }
+        } else {
+            return { ...res._doc, ['isLike']: false }
+        }
+
+    })
+    res.send(newData)
+    // return;
+
+
+    // Post.find().populate({ path: 'postedBy', model: User })
+    //     .populate({ path: 'comments.postedBy', model: User })
+    //     .exec((err, result) => {
+    //         if (err) {
+    //             return res.status(500).json(err);
+    //         }
+    //         // console.log("totalPost",result)
+    //         res.status(200).json(result);
+    //     })
+
+    // const response = await Post.aggregate([
+    //     {
+    //         $project: {
+    //             title: 1,
+    //             content: 1,
+    //             postedBy: 1,
+    //             likeCount: {
+    //                 $cond: { if: { $isArray: "$likes" }, then: { $size: "$likes" }, else: "NA" }
+    //             },
+    //             postedById: {
+    //                 $toObjectId: "$postedBy"
+    //             },
+    //         }
+    //     },
+    //     {
+    //         $lookup:{
+    //             from: 'users',
+    //             localField: "postedById",
+    //             foreignField:"_id",
+    //             as:"userDetails"
+    //         }
+    //     }
+    // ])
+    // res.send(response)
 }
 
 exports.likes = async (req, res) => {
-    let isLike = false
-    // let likeCounts = 0
-    let count = await Post.findById(req.body.postid)
-    // console.log("count++++", count.likes)
-    // // likeCounts = count.likes.length + 1
-    // if (count.likes.includes(req.user.data.user_id)) {
-    //     return res.status(400).json({
-    //         error: "already liked",
-    //     });
-    // } else {
-    // console.log(count.likes.includes(req.user.data.user_id))
-    if (isLike && !count.likes.includes(req.user.data.user_id)) {
-        Post.findByIdAndUpdate(req.body.postid, {
-            $set: {
-                isLike: true
-            }
-        }, {
-            $push: { likes: req.user.data.user_id }
-        }, {
-            new: true
-        }).populate({ path: 'postedBy', model: User })
-            .populate({ path: 'comments.postedBy', model: User })
-            .exec().then(result => {
-                // console.log(count)
-                res.status(200).json({
-                    message: " like ",
-                    data: {
-                        result: { ...result._doc, isLike: true }
-                    }
-                });
-            }).catch(err => {
-                res.status(500).json(err);
+    try {
+        let count = await Post.findById(req.body.postid)
+        console.log("count++++", count)
+        // debugger
+        if (count.likes.includes(req.user.data.user_id)) {
+            return res.status(200).json({
+                status: 200,
+                success: true,
+                message: " like Already Exist",
             });
+        } else {
+            Post.findByIdAndUpdate(req.body.postid,
+                // { LikeCounts: count.LikeCounts + 1 },
+                {
+                    $push: { likes: req.user.data.user_id },
+                    $set: { LikeCounts: count.LikeCounts + 1 }
+                },
+                { new: true }
+            ).populate({ path: 'postedBy', model: User })
+                .populate({ path: 'comments.postedBy', model: User })
+                .exec().then(result => {
+                    console.log("++++++", result)
+                    res.status(200).json({
+                        message: " Successfully liked ",
+                        result
+                    });
+                }).catch(err => {
+                    res.status(400).json(err);
+                });
+        }
+    } catch (error) {
+        return res.status(400).send({
+            error,
+            status: 400,
+            success: false,
+            message: "Failed To update likes",
+        });
     }
 
-    // }
 
 }
 
+
 exports.unlikes = async (req, res, next) => {
-    // let count = await Post.findById(req.body.postid)
-    // likeCounts = count.likes.length - 1
-    // if (count.likes.includes(req.user.data.user_id)) {
-    Post.findByIdAndUpdate(req.body.postid, {
-        $pull: { likes: req.user.data.user_id }
-    }, {
-        new: true
-    }).populate({ path: 'postedBy', model: User }).populate({ path: 'comments.postedBy', model: User }).exec().then(result => {
-        res.status(200).json({
-            message: " unlike ",
-            data: {
-                result: { ...result._doc, likeCounts }
-            }
+    try {
+        let count = await Post.findById(req.body.postid)
+        console.log("count----", count)
+        if (count.likes.includes(req.user.data.user_id)) {
+            Post.findByIdAndUpdate(req.body.postid,
+                {
+                    $pull: { likes: req.user.data.user_id },
+                    $set: { LikeCounts: count.LikeCounts - 1 }
+                },
+                { new: true }
+            ).populate({ path: 'postedBy', model: User })
+                .populate({ path: 'comments.postedBy', model: User })
+                .exec().then(result => {
+                    console.log("------", result)
+                    res.status(200).json({
+                        message: " Successfully unliked ",
+                        result
+                    });
+                }).catch(err => {
+                    res.status(400).json(err);
+                });
+ 
+           
+        } else {
+            return res.status(200).json({
+                status: 200,
+                success: true,
+                message: "Already unliked",
+            });
+        }
+    } catch (error) {
+        return res.status(400).send({
+            error,
+            status: 400,
+            success: false,
+            message: "Failed To update unlikes",
         });
-    }).catch(err => {
-        res.status(500).json(err);
-    });
-    // } else {
-    //     return res.status(400).json({
-    //         error: "already unliked",
-    //     });
-    // }
+    }
+
 
 }
 exports.comment = (req, res) => {
@@ -262,3 +334,62 @@ exports.updatePost = async (req, res) => {
 //             res.status(500).json(err);
 //         });
 // }
+
+
+
+
+
+
+
+
+
+
+
+//sumit sir ne bataya tha
+ //     Post.updateMany(
+            //         req.body.postid,
+            //         { $inc: { LikeCounts: 1 } }, {
+            //         $push: { likes: req.user.data.user_id }
+            //     },
+            //         function (err, result) {
+            //             // console.log("}}", err)
+            //             if (err) {
+            //                return res.status(400).json({
+            //                     error: err,
+            //                 });
+            //             }
+            //             else {
+            //                 console.log("++", result)
+            //               return  res.status(200).json({
+            //                     message: " like ",
+            //                     result
+            //                 });
+            //             }
+
+
+            //         }
+            //     )
+            
+            
+            
+            // return
+            // Post.findByIdAndUpdate(req.body.postid, (
+            //     { $inc: { LikeCounts: -1 } }
+            //     , {
+            //         $pull: { likes: req.user.data.user_id }
+            //     }
+            // ),
+            //     {
+            //         new: true
+            //     }
+            // ).populate({ path: 'postedBy', model: User })
+            //     .populate({ path: 'comments.postedBy', model: User })
+            //     .exec().then(result => {
+            //         // console.log(count)
+            //         res.status(200).json({
+            //             message: " unlike ",
+            //             result
+            //         });
+            //     }).catch(err => {
+            //         res.status(500).json(err);
+            //     });
